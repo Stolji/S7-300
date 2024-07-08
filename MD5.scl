@@ -1,0 +1,286 @@
+﻿FUNCTION "MD5" : Void
+{ S7_Optimized_Access := 'FALSE' }
+VERSION : 0.1
+   VAR_INPUT 
+      msg : String;
+      msg_AT AT msg : Struct
+         Len : Struct
+            Max : Byte;
+            Act : Byte;
+         END_STRUCT;
+         Data : Array[0..253] of Byte;
+      END_STRUCT;
+   END_VAR
+
+   VAR_OUTPUT 
+      ComputeMD5 : String;
+   END_VAR
+
+   VAR_TEMP 
+      InitA : DInt;
+      InitB : DInt;
+      InitC : DInt;
+      InitD : DInt;
+      Shifts : Array[0..15] of DInt;
+      T : Array[0..63] of DInt;
+      i : Int;
+      j : Int;
+      n : Int;
+      buffIdx : Int;
+      a : DInt;
+      b : DInt;
+      c : DInt;
+      d : DInt;
+      a0 : DInt;
+      b0 : DInt;
+      c0 : DInt;
+      d0 : DInt;
+      tmp : DInt;
+      round : DInt;
+      f : DInt;
+      msgBytes : DInt;
+      msgBits : DInt;
+      blocks : DInt;
+      padLen : DInt;
+      RotateLeft32 : DInt;
+      buffer : Array[0..15] of DInt;
+      hash : Array[0..15] of Byte;
+      padded : Array[0..1023] of Byte;
+   END_VAR
+
+
+BEGIN
+	
+	//Per-round shift amounts
+	#Shifts[00] := 07;
+	#Shifts[01] := 12;
+	#Shifts[02] := 17;
+	#Shifts[03] := 22;
+	#Shifts[04] := 05;
+	#Shifts[05] := 09;
+	#Shifts[06] := 14;
+	#Shifts[07] := 20;
+	#Shifts[08] := 04;
+	#Shifts[09] := 11;
+	#Shifts[10] := 16;
+	#Shifts[11] := 23;
+	#Shifts[12] := 06;
+	#Shifts[13] := 10;
+	#Shifts[14] := 15;
+	#Shifts[15] := 21;
+	
+	//Binary integer parts of sines of integers (in radians)
+	#T[00] := 16#d76aa478;
+	#T[01] := 16#e8c7b756;
+	#T[02] := 16#242070db;
+	#T[03] := 16#c1bdceee;
+	#T[04] := 16#f57c0faf;
+	#T[05] := 16#4787c62a;
+	#T[06] := 16#a8304613;
+	#T[07] := 16#fd469501;
+	
+	#T[08] := 16#698098d8;
+	#T[09] := 16#8b44f7af;
+	#T[10] := 16#ffff5bb1;
+	#T[11] := 16#895cd7be;
+	#T[12] := 16#6b901122;
+	#T[13] := 16#fd987193;
+	#T[14] := 16#a679438e;
+	#T[15] := 16#49b40821;
+	
+	#T[16] := 16#f61e2562;
+	#T[17] := 16#c040b340;
+	#T[18] := 16#265e5a51;
+	#T[19] := 16#e9b6c7aa;
+	#T[20] := 16#d62f105d;
+	#T[21] := 16#02441453;
+	#T[22] := 16#d8a1e681;
+	#T[23] := 16#e7d3fbc8;
+	
+	#T[24] := 16#21e1cde6;
+	#T[25] := 16#c33707d6;
+	#T[26] := 16#f4d50d87;
+	#T[27] := 16#455a14ed;
+	#T[28] := 16#a9e3e905;
+	#T[29] := 16#fcefa3f8;
+	#T[30] := 16#676f02d9;
+	#T[31] := 16#8d2a4c8a;
+	
+	#T[32] := 16#fffa3942;
+	#T[33] := 16#8771f681;
+	#T[34] := 16#6d9d6122;
+	#T[35] := 16#fde5380c;
+	#T[36] := 16#a4beea44;
+	#T[37] := 16#4bdecfa9;
+	#T[38] := 16#f6bb4b60;
+	#T[39] := 16#bebfbc70;
+	
+	#T[40] := 16#289b7ec6;
+	#T[41] := 16#eaa127fa;
+	#T[42] := 16#d4ef3085;
+	#T[43] := 16#04881d05;
+	#T[44] := 16#d9d4d039;
+	#T[45] := 16#e6db99e5;
+	#T[46] := 16#1fa27cf8;
+	#T[47] := 16#c4ac5665;
+	
+	#T[48] := 16#f4292244;
+	#T[49] := 16#432aff97;
+	#T[50] := 16#ab9423a7;
+	#T[51] := 16#fc93a039;
+	#T[52] := 16#655b59c3;
+	#T[53] := 16#8f0ccc92;
+	#T[54] := 16#ffeff47d;
+	#T[55] := 16#85845dd1;
+	
+	#T[56] := 16#6fa87e4f;
+	#T[57] := 16#fe2ce6e0;
+	#T[58] := 16#a3014314;
+	#T[59] := 16#4e0811a1;
+	#T[60] := 16#f7537e82;
+	#T[61] := 16#bd3af235;
+	#T[62] := 16#2ad7d2bb;
+	#T[63] := 16#eb86d391;
+	
+	
+	// Calculate padding 
+	#msgBytes := #msg_AT.Len.Act;
+	#msgBits := #msgBytes * 8;
+	#blocks := DWORD_TO_DINT(SHR(IN := #msgBytes + 8, N := 6)) + 1;
+	#padLen := DWORD_TO_DINT(SHL(IN := #blocks, N := 6)) - #msgBytes;
+	
+	
+	// Initializing buffers
+	FOR #i := 7 TO 128 DO
+	    #padded[#i] := 0;
+	END_FOR;
+	
+	FOR #i := 0 TO 15 DO
+	    #buffer[#i] := 0;
+	    "Hash_Debuger".Arr[#i] := #msg_AT.Data[#i];
+	END_FOR;
+	
+	// Pad message 
+	#padded[0] := 16#80; (* append 1 bit => 0b10000000 *)
+	
+	FOR #i := 0 TO 7 DO
+	    #padded[#padLen - 8 + #i] := DWORD_TO_BYTE(#msgBits);
+	    #msgBits := SHR(IN := #msgBits, N := 8);
+	END_FOR;
+	
+	// Init registers 
+	#a := 16#67452301;
+	#b := 16#efcdab89;
+	#c := 16#98badcfe;
+	#d := 16#10325476;
+	
+	// Process MD5 hash one message block at a Time
+	FOR #i := 0 TO DINT_TO_INT(#blocks - 1) DO
+	    
+	     // Load #buffer with padded message 
+	    #tmp := INT_TO_DINT(SHL(IN := #i, N := 6));
+	    
+	    FOR #j := 0 TO 63 DO
+	        #buffIdx := SHR(IN := #j, N := 2);
+	        
+	        IF #tmp < #msgBytes THEN
+	            #buffer[#buffIdx] := SHL(IN := BYTE_TO_DWORD(#msg_AT.Data[#tmp]), N := 24) OR SHR(IN := #buffer[#buffIdx], N := 8);
+	        ELSE
+	            #buffer[#buffIdx] := SHL(IN := BYTE_TO_DWORD(#padded[#tmp - #msgBytes]), N := 24) OR SHR(IN := #buffer[#buffIdx], N := 8);
+	        END_IF;
+	        #tmp := #tmp + 1;
+	    END_FOR;
+	    
+	    // Init registers 
+	    #a0 := #a;
+	    #b0 := #b;
+	    #c0 := #c;
+	    #d0 := #d;
+	    
+	    // apply transformations 
+	    FOR #j := 0 TO 63 DO
+	        
+	        #round := SHR(IN := #j, N := 4);
+	        
+	        CASE #round OF
+	            0:  // Auxiliary function F 
+	                
+	                #f := (DINT_TO_DWORD(#b) AND DINT_TO_DWORD(#c)) OR ((NOT DINT_TO_DWORD(#b)) AND DINT_TO_DWORD(#d));
+	                #buffIdx := #j;
+	                
+	            1:  // Auxiliary function G 
+	                
+	                #f := (DINT_TO_DWORD(#b) AND DINT_TO_DWORD(#d)) OR (DINT_TO_DWORD(#c) AND (NOT DINT_TO_DWORD(#d)));
+	                #buffIdx := DINT_TO_INT(DINT_TO_DWORD((#j * 5) + 1) AND 16#0f);
+	                
+	            2:  // Auxiliary function H 
+	                
+	                #f := DINT_TO_DWORD(#b) XOR DINT_TO_DWORD(#c) XOR DINT_TO_DWORD(#d);
+	                #buffIdx := DINT_TO_INT(DINT_TO_DWORD((#j * 3) + 5) AND 16#0F);
+	                
+	            3:  // Auxiliary function I 
+	                
+	                #f := DINT_TO_DWORD(#c) XOR (DINT_TO_DWORD(#b) OR (NOT DINT_TO_DWORD(#d)));
+	                #buffIdx := DINT_TO_INT(DINT_TO_DWORD(#j * 7) AND 16#0f);
+	                
+	        END_CASE;
+	        
+	        #RotateLeft32 := #a + #f + #buffer[#buffIdx] + #T[#j];
+	        #n := DINT_TO_INT(#Shifts[DINT_TO_INT(SHL(IN := #round, N := 2) OR (INT_TO_WORD(#j) AND 3))]);
+	        
+	        #tmp := #b + DWORD_TO_DINT(SHL(IN := #RotateLeft32, N := #n) OR SHR(IN := #RotateLeft32, N := (32 - #n)));
+	        #a := #d;
+	        #d := #c;
+	        #c := #b;
+	        #b := #tmp;
+	        
+	    END_FOR;
+	    
+	    #a := #a + #a0;
+	    #b := #b + #b0;
+	    #c := #c + #c0;
+	    #d := #d + #d0;
+	END_FOR;
+	    
+	// Finalize hash bytes 
+	#buffIdx := 0;
+	#tmp := 0;
+	FOR #i := 0 TO 3 DO
+	    CASE #i OF
+	        0:
+	            #tmp := #a;
+	        1:
+	            #tmp := #b;
+	        2:
+	            #tmp := #c;
+	        3:
+	            #tmp := #d;
+	    END_CASE;
+	    
+	    FOR #j := 0 TO 3 DO
+	        #hash[#buffIdx] := DINT_TO_BYTE(#tmp);
+	        #buffIdx := #buffIdx + 1;
+	        #tmp := SHR(IN := #tmp, N := 8)
+	        ;
+	    END_FOR;
+	END_FOR;
+	    
+	// Return hash as string 
+	#ComputeMD5 := '';
+	FOR #i := 0 TO 15 DO
+	    
+	    IF BYTE_TO_INT(ROL(IN := #hash[#i], N := 4) AND 16#0F) >= 10 THEN
+	        #ComputeMD5 := CONCAT(IN1 := #ComputeMD5, IN2 := BYTE_TO_CHAR(INT_TO_BYTE(BYTE_TO_INT(ROL(IN := #hash[#i], N := 4) AND 16#0F) + 16#57)));
+	    ELSE
+	        #ComputeMD5 := CONCAT(IN1 := #ComputeMD5, IN2 := BYTE_TO_CHAR(INT_TO_BYTE(BYTE_TO_INT(ROL(IN := #hash[#i], N := 4) AND 16#0F) + 16#30)));
+	    END_IF;
+	        
+	    IF BYTE_TO_INT(#hash[#i] AND 16#0F) >= 10 THEN
+	        #ComputeMD5 := CONCAT(IN1 := #ComputeMD5, IN2 := BYTE_TO_CHAR(INT_TO_BYTE(BYTE_TO_INT(#hash[#i] AND 16#0F) + 16#57)));
+	    ELSE
+	        #ComputeMD5 := CONCAT(IN1 := #ComputeMD5, IN2 := BYTE_TO_CHAR(INT_TO_BYTE(BYTE_TO_INT(#hash[#i] AND 16#0F) + 16#30)));
+	    END_IF;
+	END_FOR;
+	    
+END_FUNCTION
+
