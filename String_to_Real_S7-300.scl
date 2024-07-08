@@ -1,0 +1,58 @@
+﻿FUNCTION "String_to_Real" : Real
+{ S7_Optimized_Access := 'FALSE' }
+VERSION : 0.1
+   VAR_INPUT 
+      IN : String;
+      IN_AT AT IN : Struct
+         Len : Struct
+            Max : Byte;
+            Act : Byte;
+         END_STRUCT;
+         Data : Array[1..254] of Byte;
+      END_STRUCT;
+   END_VAR
+
+   VAR_TEMP 
+      Tmp : Struct
+         Val : Real;
+         DecimalPlaceFounded : Bool;
+         DecimalShift : Int;
+         i : Int;
+      END_STRUCT;
+   END_VAR
+
+
+BEGIN
+	
+	#Tmp.DecimalPlaceFounded := False;
+	#Tmp.DecimalShift := 1;
+	#Tmp.Val := 0;
+	
+	FOR #Tmp.i := 1 TO BYTE_TO_INT(#IN_AT.Len.Act) DO
+	    
+	    CASE BYTE_TO_INT(#IN_AT.Data[#Tmp.i]) OF
+	            
+	        16#30,  16#31, 16#32,  16#33, 16#34, 16#35, 16#36, 16#37, 16#38, 16#39:
+	            IF #Tmp.DecimalPlaceFounded THEN
+	                
+	                #Tmp.Val := #Tmp.Val * 10;
+	                #Tmp.Val := #Tmp.Val + INT_TO_REAL(BYTE_TO_INT(#IN_AT.Data[#Tmp.i]) - 16#30);
+	                #Tmp.DecimalShift := #Tmp.DecimalShift * 10;
+	            ELSE
+	                #Tmp.Val := #Tmp.Val * 10;
+	                #Tmp.Val := #Tmp.Val + INT_TO_REAL(BYTE_TO_INT(#IN_AT.Data[#Tmp.i]) - 16#30);
+	            END_IF;
+	        16#2E:
+	            #Tmp.DecimalPlaceFounded := True;
+	    END_CASE;
+	END_FOR;
+	
+	IF #IN_AT.Data[#Tmp.i] = 16#2D THEN
+	    
+	    #String_to_Real := - #Tmp.Val / #Tmp.DecimalShift;
+	ELSE
+	    #String_to_Real := #Tmp.Val / #Tmp.DecimalShift;
+	END_IF;
+	
+END_FUNCTION
+
