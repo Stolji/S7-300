@@ -1,0 +1,75 @@
+﻿FUNCTION "Real_to_String_Format" : String
+{ S7_Optimized_Access := 'FALSE' }
+VERSION : 0.1
+   VAR_INPUT 
+      IN : Real;   // // Value
+      n : Int;   // // Count of chars
+      dp : Int;   // // numbers before decimal dot
+      Sign : Bool;   // //Enable signature
+   END_VAR
+
+   VAR_TEMP 
+      Tmp : Struct
+         Val_S : String;
+         Val_S_1 : String;
+         i : Int;
+         j : Int;
+         Val : DInt;
+         Signature : Char;
+      END_STRUCT;
+      Tmp_AT AT Tmp : Struct
+         Val_S : Struct
+            Len : Struct
+               Max : Byte;
+               Act : Byte;
+            END_STRUCT;
+            Data : Array[1..254] of Char;
+         END_STRUCT;
+      END_STRUCT;
+   END_VAR
+
+
+BEGIN
+	
+	FOR #Tmp.i := 1 TO #dp DO
+	    #IN := #IN * 10.0;
+	END_FOR;
+	
+	#Tmp.Val := REAL_TO_DINT(#IN);
+	
+	#Tmp.Val_S := DINT_TO_STRING(#Tmp.Val);
+	#Tmp.Val_S_1 := '';
+	
+	
+	IF BYTE_TO_INT(#Tmp_AT.Val_S.Len.Act) > #n + 1 THEN
+	    
+	    FOR #Tmp.i := 1 TO #n DO
+	        #Tmp.Val_S_1 := CONCAT(IN1 := #Tmp.Val_S_1, IN2 := '#');
+	    END_FOR;
+	ELSE
+	    
+	    #Tmp.j := 1;
+	    FOR #Tmp.i := 1 TO #n + 2 DO
+	        
+	        IF #Tmp.i = 1 THEN
+	            IF #Sign THEN
+	                #Tmp.Val_S_1 := CONCAT(IN1 := #Tmp.Val_S_1, IN2 := #Tmp_AT.Val_S.Data[#Tmp.j]);
+	            ELSE
+	                ;// #Tmp.Val_S_1 := CONCAT(IN1 := #Tmp.Val_S_1, IN2 := '0');
+	            END_IF;
+	            #Tmp.j := #Tmp.j + 1;
+	        ELSIF #dp = #n + 2 - #Tmp.i THEN
+	            #Tmp.Val_S_1 := CONCAT(IN1 := #Tmp.Val_S_1, IN2 := '.');
+	        ELSIF SEL(G:= #dp < #n + 2 - #Tmp.i, IN1 := #n >= BYTE_TO_INT(#Tmp_AT.Val_S.Len.Act) + #Tmp.i - 2, IN0 := #n >= BYTE_TO_INT(#Tmp_AT.Val_S.Len.Act) + #Tmp.i - 3) THEN
+	            #Tmp.Val_S_1 := CONCAT(IN1 := #Tmp.Val_S_1, IN2 := '0');
+	        ELSE
+	            #Tmp.Val_S_1 := CONCAT(IN1 := #Tmp.Val_S_1, IN2 := #Tmp_AT.Val_S.Data[#Tmp.j]);
+	            #Tmp.j := #Tmp.j + 1;
+	        END_IF;
+	    END_FOR;
+	END_IF;
+	
+	#Real_to_String_Format := #Tmp.Val_S_1;
+	
+END_FUNCTION
+
