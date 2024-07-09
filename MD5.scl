@@ -157,7 +157,6 @@ BEGIN
 	
 	FOR #i := 0 TO 15 DO
 	    #buffer[#i] := 0;
-	    "Hash_Debuger".Arr[#i] := #msg_AT.Data[#i];
 	END_FOR;
 	
 	// Pad message 
